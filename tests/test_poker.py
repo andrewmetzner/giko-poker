@@ -47,13 +47,13 @@ class BankTestCase(unittest.TestCase):
 
 
 class TestParse(unittest.TestCase):
-    def test_hash_and_bang_are_the_same(self):
+    def test_hash_commands(self):
         self.assertEqual(wizard.parse("#poker 10"), ("poker", ["10"]))
-        self.assertEqual(wizard.parse("!poker 10"), ("poker", ["10"]))
         self.assertEqual(wizard.parse("#POKER"), ("poker", []))
 
     def test_non_commands(self):
-        for msg in ["", "   ", "!", "#", "poker 10", "hello #poker"]:
+        for msg in ["", "   ", "!", "#", "poker 10", "hello #poker",
+                    "!poker 10", "!drop 1", "!wizcoins", "!help"]:
             self.assertEqual(wizard.parse(msg), (None, []), msg)
 
 
@@ -68,7 +68,7 @@ class TestGate(BankTestCase):
 
     def test_non_wizards_cannot_play(self):
         for who in [MUGGLE, SPOOF, "Spy"]:
-            for msg in ["!poker 5", "#poker 5", "!drop 1", "#drop 0"]:
+            for msg in ["#poker 5", "#drop 1", "#drop 0"]:
                 out = poker.cmd(who, msg)
                 self.assertEqual(len(out), 1)
                 self.assertIn("wizards only", out[0])
@@ -76,7 +76,7 @@ class TestGate(BankTestCase):
         self.assertFalse(self.bank.exists())
 
     def test_non_wizard_has_no_account(self):
-        self.assertIn("wizards only", wizcoins.cmd(MUGGLE, "!wizcoins")[0])
+        self.assertIn("wizards only", wizcoins.cmd(MUGGLE, "#wizcoins")[0])
         with self.assertRaises(ValueError):
             wizcoins.balance(MUGGLE)
 
@@ -129,7 +129,7 @@ class TestGame(BankTestCase):
         return dealt, settled
 
     def test_new_wizard_starts_with_20(self):
-        self.assertEqual(wizcoins.cmd(WIZ, "!wizcoins"),
+        self.assertEqual(wizcoins.cmd(WIZ, "#wizcoins"),
                          ["akai has 20 Wizcoins."])
 
     def test_win_pays_bet_times_multiplier(self):
@@ -165,28 +165,28 @@ class TestGame(BankTestCase):
     def test_bad_bet_defaults_to_one(self):
         for bet in ["lots", "-50", "0"]:
             poker.games.clear()
-            poker.cmd(WIZ, f"!poker {bet}")
+            poker.cmd(WIZ, f"#poker {bet}")
             self.assertEqual(poker.games[WIZ]["bet"], 1, bet)
 
     def test_broke_wizard_gets_pity_coins(self):
         wizcoins.withdraw(WIZ, 20)
-        out = poker.cmd(WIZ, "!poker 100")
+        out = poker.cmd(WIZ, "#poker 100")
         self.assertEqual(out[0], "akai is broke, here's 5 Wizcoins.")
         self.assertEqual(poker.games[WIZ]["bet"], 5)
 
     def test_new_hand_forfeits_old_bet(self):
-        poker.cmd(WIZ, "!poker 4")
-        out = poker.cmd(WIZ, "!poker 1")
+        poker.cmd(WIZ, "#poker 4")
+        out = poker.cmd(WIZ, "#poker 1")
         self.assertEqual(out[0], "You forfeit 4 and begin a new game...")
         self.assertEqual(wizcoins.balance(WIZ), 16)
 
     def test_drop_without_hand(self):
-        self.assertIn("you need to start a game with !poker",
-                      poker.cmd(WIZ, "!drop 1")[0])
+        self.assertIn("you need to start a game with #poker",
+                      poker.cmd(WIZ, "#drop 1")[0])
 
     def test_bad_drop_keeps_hand(self):
-        poker.cmd(WIZ, "!poker 1")
-        self.assertEqual(poker.cmd(WIZ, "!drop two"), [poker.DROP_USAGE])
+        poker.cmd(WIZ, "#poker 1")
+        self.assertEqual(poker.cmd(WIZ, "#drop two"), [poker.DROP_USAGE])
         self.assertIn(WIZ, poker.games)
 
     def test_balances_persist(self):
@@ -199,10 +199,16 @@ class TestGame(BankTestCase):
         wizcoins.balance(WIZ)
         self.assertEqual(wizcoins.cmd(MUGGLE, "#wizards"),
                          ["Richest wizards: bob: 520 / akai: 20"])
-        self.assertEqual(wizcoins.cmd(MUGGLE, "!wizcoins bob◇wizardTREQ"),
+        self.assertEqual(wizcoins.cmd(MUGGLE, "#wizcoins bob◇wizardTREQ"),
                          ["bob has 520 Wizcoins."])
-        self.assertEqual(wizcoins.cmd(MUGGLE, "!wizcoins nobody"),
+        self.assertEqual(wizcoins.cmd(MUGGLE, "#wizcoins nobody"),
                          ["nobody has no Wizcoins yet."])
+
+    def test_bang_commands_are_ignored(self):
+        for msg in ["!poker 5", "!drop 0", "!wizcoins", "!wizards"]:
+            self.assertEqual(poker.cmd(WIZ, msg) + wizcoins.cmd(WIZ, msg), [], msg)
+        self.assertEqual(help_plugin.cmd(WIZ, "!help"), [])
+        self.assertEqual(poker.games, {})
 
     def test_help(self):
         self.assertEqual(help_plugin.cmd(MUGGLE, "#help"), [help_plugin.HELP])

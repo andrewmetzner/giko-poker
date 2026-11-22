@@ -8,10 +8,10 @@ works out a tripcode from the name#password login. So a name ending in
 WIZARD_TRIP = "◆wizardTREQ"
 
 # The server also swaps ◆ for ◇ inside chat messages, so a typed name
-# like "!wizcoins akai◆wizardTREQ" reaches the bot as "akai◇wizardTREQ".
+# like "#wizcoins akai◆wizardTREQ" reaches the bot as "akai◇wizardTREQ".
 _TYPED_TRIP = "◇" + WIZARD_TRIP[1:]
 
-PREFIXES = ("!", "#")
+PREFIX = "#"
 
 
 def is_wizard(name):
@@ -34,13 +34,13 @@ def full_name(typed):
 
 
 def parse(msg):
-    """Split a chat message into (command, args), taking ! or # as the prefix.
+    """Split a chat message into (command, args).
 
-    "#poker 10" and "!poker 10" both give ("poker", ["10"]).
-    Anything that isn't a command gives (None, []).
+    "#poker 10" gives ("poker", ["10"]). Anything that isn't a # command,
+    including the old !poker style, gives (None, []).
     """
     words = msg.split()
-    if not words or len(words[0]) < 2 or words[0][0] not in PREFIXES:
+    if not words or len(words[0]) < 2 or words[0][0] != PREFIX:
         return None, []
     return words[0][1:].lower(), words[1:]
 

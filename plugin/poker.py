@@ -1,6 +1,6 @@
 """Five-card draw video poker (Jacks or Better), for wizards only.
 
-!poker <bet> (or #poker <bet>) deals five cards. !drop <positions>
+#poker <bet> deals five cards. #drop <positions>
 swaps those cards and settles the hand.
 
 The paytable is the same as upstream giko.py: a winning hand pays
@@ -37,7 +37,7 @@ FACES = {1: "A", 11: "J", 12: "Q", 13: "K"}
 HIGH_PAIRS = {1, 11, 12, 13}  # aces, jacks, queens, kings
 
 DROP_USAGE = ("Please type a space separated list of cards to discard, "
-              "eg !drop 0 or !drop 2 or !drop 1 2 4")
+              "eg #drop 0 or #drop 2 or #drop 1 2 4")
 
 _rng = random.SystemRandom()
 _lock = threading.RLock()
@@ -95,7 +95,7 @@ def draw(player, args):
     name = wizard.short_name(player)
     game = games.get(player)
     if game is None:
-        return [f"{name}, you need to start a game with !poker "
+        return [f"{name}, you need to start a game with #poker "
                 "before you can discard cards."]
 
     try:

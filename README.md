@@ -20,18 +20,18 @@ To give the bot its own tripcode, put a secret on the first line of
 
 ## Playing
 
-Every command works with `!` or `#`, so `#poker 10` is the same as `!poker 10`.
+Every command starts with `#`. The old `!` style is ignored.
 
 | Command | What it does |
 | --- | --- |
-| `!poker <bet>` | Deal five cards (Jacks or Better). Bet 1 to 1000 Wizcoins. |
-| `!drop 2 5` | Swap cards 2 and 5 and settle the hand. `!drop 0` keeps all five. |
-| `!wizcoins [name]` | Show your balance, or another wizard's. |
-| `!wizards` | Top 5 richest wizards. |
-| `!help` | Command summary. |
+| `#poker <bet>` | Deal five cards (Jacks or Better). Bet 1 to 1000 Wizcoins. |
+| `#drop 2 5` | Swap cards 2 and 5 and settle the hand. `#drop 0` keeps all five. |
+| `#wizcoins [name]` | Show your balance, or another wizard's. |
+| `#wizards` | Top 5 richest wizards. |
+| `#help` | Command summary. |
 
 New wizards start with 20 Wizcoins. A wizard who goes broke gets 5 from
-the wizard council on their next `!poker`. Dealing a new hand before
+the wizard council on their next `#poker`. Dealing a new hand before
 finishing the last one forfeits the old bet.
 
 Payouts (net Wizcoins per Wizcoin bet, same as upstream giko.py):
