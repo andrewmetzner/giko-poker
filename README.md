@@ -38,15 +38,15 @@ Payouts (net Wizcoins per Wizcoin bet, same as upstream giko.py):
 
 | Hand | Pays |
 | --- | --- |
-| Royal Flush | 800 |
-| Straight Flush | 50 |
-| Four of a Kind | 25 |
-| Full House | 9 |
-| Flush | 6 |
-| Straight | 4 |
-| Three of a Kind | 3 |
-| Two Pair | 2 |
-| Jacks or Better | 1 |
+| royal flush | 800 |
+| straight flush | 50 |
+| four of a kind | 25 |
+| full house | 9 |
+| flush | 6 |
+| straight | 4 |
+| three of a kind | 3 |
+| two pair | 2 |
+| pair (jacks or better) | 1 |
 
 These favor the player heavily, so Wizcoins pile up. Edit `PAYTABLE` in
 `plugin/poker.py` to change that.

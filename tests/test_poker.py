@@ -87,15 +87,15 @@ class TestGate(BankTestCase):
 
 class TestEvaluate(unittest.TestCase):
     cases = {
-        "Royal Flush": ["HA", "HK", "HQ", "HJ", "H10"],
-        "Straight Flush": ["S9", "S8", "S7", "S6", "S5"],
-        "Four of a Kind": ["H3", "S3", "C3", "D3", "HK"],
-        "Full House": ["H3", "S3", "C3", "DK", "HK"],
-        "Flush": ["C2", "C5", "C9", "CJ", "CK"],
-        "Straight": ["HA", "S2", "C3", "D4", "H5"],
-        "Three of a Kind": ["H7", "S7", "C7", "D2", "HK"],
-        "Two Pair": ["H2", "S2", "C9", "D9", "HK"],
-        "Jacks or Better": ["HJ", "SJ", "C2", "D5", "H9"],
+        "royal flush": ["HA", "HK", "HQ", "HJ", "H10"],
+        "straight flush": ["S9", "S8", "S7", "S6", "S5"],
+        "four of a kind": ["H3", "S3", "C3", "D3", "HK"],
+        "full house": ["H3", "S3", "C3", "DK", "HK"],
+        "flush": ["C2", "C5", "C9", "CJ", "CK"],
+        "straight": ["HA", "S2", "C3", "D4", "H5"],
+        "three of a kind": ["H7", "S7", "C7", "D2", "HK"],
+        "two pair": ["H2", "S2", "C9", "D9", "HK"],
+        "pair": ["HJ", "SJ", "C2", "D5", "H9"],
     }
 
     def test_paying_hands(self):
@@ -104,11 +104,11 @@ class TestEvaluate(unittest.TestCase):
 
     def test_ace_high_straight_without_flush(self):
         self.assertEqual(poker.evaluate(hand("HA", "SK", "CQ", "DJ", "H10")),
-                         "Straight")
+                         "straight")
 
     def test_pair_of_aces_pays(self):
         self.assertEqual(poker.evaluate(hand("HA", "SA", "C2", "D5", "H9")),
-                         "Jacks or Better")
+                         "pair")
 
     def test_non_paying_hands(self):
         for cards in [["H10", "S10", "C2", "D5", "H9"],  # low pair
@@ -135,52 +135,58 @@ class TestGame(BankTestCase):
     def test_win_pays_bet_times_multiplier(self):
         dealt, settled = self.play(["HA", "HK", "HQ", "HJ", "S2"], ["H10"],
                                    bet=10, drop="5")
-        self.assertIn("akai bets 10 Wizcoins", dealt[0])
-        self.assertIn("[5]♠2", dealt[0])
-        self.assertIn("Royal Flush! akai wins 8000", settled[0])
+        self.assertEqual(dealt, ["akai's hand is now (♥A/♥K/♥Q/♥J/♠2), "
+                                 "enter some cards to discard (0 or 1-5)"])
+        self.assertEqual(settled, [
+            "akai's hand is now (♥A/♥K/♥Q/♥J/♥10).",
+            "Congrats on the royal flush akai, you won 8000 "
+            "and now have 8020 Wizcoins!"])
         self.assertEqual(wizcoins.balance(WIZ), 20 + 8000)
         self.assertEqual(poker.games, {})
 
     def test_loss_costs_the_bet(self):
         _, settled = self.play(["H2", "S4", "C6", "D8", "H10"], [],
                                bet=7, drop="0")
-        self.assertIn("loses 7", settled[0])
+        self.assertEqual(settled[1],
+                         "Sorry akai, you lost 7 and now have 13 Wizcoins.")
         self.assertEqual(wizcoins.balance(WIZ), 13)
 
     def test_drop_replaces_in_place(self):
         _, settled = self.play(["H2", "S4", "C6", "D8", "H10"], ["SK", "CK"],
                                bet=1, drop="1 3")
-        self.assertTrue(settled[0].startswith("(♠K ♠4 ♣K ♦8 ♥10)"), settled[0])
+        self.assertEqual(settled[0], "akai's hand is now (♠K/♠4/♣K/♦8/♥10).")
 
     def test_bet_is_capped_by_balance(self):
-        dealt, _ = self.play(["H2", "S4", "C6", "D8", "H10"], [],
-                             bet=999999, drop="0")
-        self.assertIn("bets 20 Wizcoins", dealt[0])
-        self.assertEqual(wizcoins.balance(WIZ), 0)
+        _, settled = self.play(["H2", "S4", "C6", "D8", "H10"], [],
+                               bet=999999, drop="0")
+        self.assertEqual(settled[1],
+                         "Sorry akai, you lost 20 and now have 0 Wizcoins.")
 
     def test_bad_bet_defaults_to_one(self):
         for bet in ["lots", "-50", "0"]:
             poker.games.clear()
-            self.assertIn("bets 1 Wizcoins", poker.cmd(WIZ, f"!poker {bet}")[0])
+            poker.cmd(WIZ, f"!poker {bet}")
+            self.assertEqual(poker.games[WIZ]["bet"], 1, bet)
 
     def test_broke_wizard_gets_pity_coins(self):
         wizcoins.withdraw(WIZ, 20)
         out = poker.cmd(WIZ, "!poker 100")
-        self.assertIn("grants 5 Wizcoins", out[0])
-        self.assertIn("bets 5 Wizcoins", out[1])
+        self.assertEqual(out[0], "akai is broke, here's 5 Wizcoins.")
+        self.assertEqual(poker.games[WIZ]["bet"], 5)
 
     def test_new_hand_forfeits_old_bet(self):
         poker.cmd(WIZ, "!poker 4")
         out = poker.cmd(WIZ, "!poker 1")
-        self.assertIn("forfeits 4", out[0])
+        self.assertEqual(out[0], "You forfeit 4 and begin a new game...")
         self.assertEqual(wizcoins.balance(WIZ), 16)
 
     def test_drop_without_hand(self):
-        self.assertIn("start a hand", poker.cmd(WIZ, "!drop 1")[0])
+        self.assertIn("you need to start a game with !poker",
+                      poker.cmd(WIZ, "!drop 1")[0])
 
     def test_bad_drop_keeps_hand(self):
         poker.cmd(WIZ, "!poker 1")
-        self.assertIn("Pick cards", poker.cmd(WIZ, "!drop two")[0])
+        self.assertEqual(poker.cmd(WIZ, "!drop two"), [poker.DROP_USAGE])
         self.assertIn(WIZ, poker.games)
 
     def test_balances_persist(self):

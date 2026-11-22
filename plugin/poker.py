@@ -21,23 +21,23 @@ PITY_COINS = 5
 
 # Net Wizcoins won per Wizcoin bet.
 PAYTABLE = {
-    "Royal Flush": 800,
-    "Straight Flush": 50,
-    "Four of a Kind": 25,
-    "Full House": 9,
-    "Flush": 6,
-    "Straight": 4,
-    "Three of a Kind": 3,
-    "Two Pair": 2,
-    "Jacks or Better": 1,
+    "royal flush": 800,
+    "straight flush": 50,
+    "four of a kind": 25,
+    "full house": 9,
+    "flush": 6,
+    "straight": 4,
+    "three of a kind": 3,
+    "two pair": 2,
+    "pair": 1,  # jacks or better
 }
 
 SUITS = "♥♠♣♦"
 FACES = {1: "A", 11: "J", 12: "Q", 13: "K"}
 HIGH_PAIRS = {1, 11, 12, 13}  # aces, jacks, queens, kings
 
-DROP_USAGE = ("Pick cards to swap by position, like !drop 2 5, "
-              "or !drop 0 to keep all five.")
+DROP_USAGE = ("Please type a space separated list of cards to discard, "
+              "eg !drop 0 or !drop 2 or !drop 1 2 4")
 
 _rng = random.SystemRandom()
 _lock = threading.RLock()
@@ -69,13 +69,12 @@ def deal(player, bet_arg):
     if player in games:
         lost = games.pop(player)["bet"]
         wizcoins.withdraw(player, lost)
-        out.append(f"{name} folds the last hand and forfeits {lost} Wizcoins.")
+        out.append(f"You forfeit {lost} and begin a new game...")
 
     coins = wizcoins.balance(player)
     if coins < 1:
         coins = wizcoins.deposit(player, PITY_COINS)
-        out.append(f"{name} is broke, so the wizard council grants "
-                   f"{PITY_COINS} Wizcoins.")
+        out.append(f"{name} is broke, here's {PITY_COINS} Wizcoins.")
 
     try:
         bet = int(bet_arg)
@@ -87,8 +86,8 @@ def deal(player, bet_arg):
     hand = [deck.pop() for _ in range(5)]
     games[player] = {"deck": deck, "hand": hand, "bet": bet}
 
-    out.append(f"{name} bets {bet} Wizcoins: {show(hand, numbered=True)} "
-               f"| {DROP_USAGE}")
+    out.append(f"{name}'s hand is now {show(hand)}, "
+               "enter some cards to discard (0 or 1-5)")
     return out
 
 
@@ -96,7 +95,8 @@ def draw(player, args):
     name = wizard.short_name(player)
     game = games.get(player)
     if game is None:
-        return [f"{name}, start a hand with !poker <bet> first."]
+        return [f"{name}, you need to start a game with !poker "
+                "before you can discard cards."]
 
     try:
         picks = {int(a) for a in args}
@@ -108,15 +108,18 @@ def draw(player, args):
         hand[pos - 1] = deck.pop()
     del games[player]
 
+    out = [f"{name}'s hand is now {show(hand)}."]
     rank = evaluate(hand)
     if rank:
         won = bet * PAYTABLE[rank]
         coins = wizcoins.deposit(player, won)
-        result = f"{rank}! {name} wins {won} Wizcoins and now has {coins}."
+        out.append(f"Congrats on the {rank} {name}, you won {won} "
+                   f"and now have {coins} Wizcoins!")
     else:
         coins = wizcoins.withdraw(player, bet)
-        result = f"No luck, {name} loses {bet} Wizcoins and now has {coins}."
-    return [f"{show(hand)} {result}"]
+        out.append(f"Sorry {name}, you lost {bet} and now have "
+                   f"{coins} Wizcoins.")
+    return out
 
 
 def evaluate(hand):
@@ -129,33 +132,31 @@ def evaluate(hand):
     straight = distinct and (ranks[4] - ranks[0] == 4 or royal)
 
     if royal and flush:
-        return "Royal Flush"
+        return "royal flush"
     if straight and flush:
-        return "Straight Flush"
+        return "straight flush"
     if counts[0] == 4:
-        return "Four of a Kind"
+        return "four of a kind"
     if counts == [3, 2]:
-        return "Full House"
+        return "full house"
     if flush:
-        return "Flush"
+        return "flush"
     if straight:
-        return "Straight"
+        return "straight"
     if counts[0] == 3:
-        return "Three of a Kind"
+        return "three of a kind"
     if counts == [2, 2, 1]:
-        return "Two Pair"
+        return "two pair"
     if counts[0] == 2:
         pair = next(r for r, c in Counter(ranks).items() if c == 2)
         if pair in HIGH_PAIRS:
-            return "Jacks or Better"
+            return "pair"
     return None
 
 
-def show(hand, numbered=False):
-    cards = [f"{suit}{FACES.get(rank, rank)}" for suit, rank in hand]
-    if numbered:
-        return " ".join(f"[{i}]{c}" for i, c in enumerate(cards, 1))
-    return "(" + " ".join(cards) + ")"
+def show(hand):
+    return "(" + "/".join(f"{suit}{FACES.get(rank, rank)}"
+                          for suit, rank in hand) + ")"
 
 
 print("Poker plugin loaded")
