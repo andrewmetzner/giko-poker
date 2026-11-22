@@ -1,7 +1,3 @@
 python-socketio
 requests
 websocket-client
-yt_dlp
-Mastodon.py
-wikipedia
-cinemagoer

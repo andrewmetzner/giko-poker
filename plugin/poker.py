@@ -1,184 +1,161 @@
-#!/usr/bin/python3
+"""Five-card draw video poker (Jacks or Better), for wizards only.
+
+!poker <bet> (or #poker <bet>) deals five cards. !drop <positions>
+swaps those cards and settles the hand.
+
+The paytable is the same as upstream giko.py: a winning hand pays
+bet x multiplier on top of the stake, and a losing hand costs the bet.
+That favors the player heavily, which is what lets wizards rack up
+Wizcoins. Lower PAYTABLE to give the house an edge.
+"""
 
 import random
-import copy
-from . import bank
+import threading
+from collections import Counter
 
-state = {}
-# {player: [deck, hand, amount]}
+from . import wizard
+from . import wizcoins
 
-suits = {"hearts": "♥",
-         "spades": "♠",
-         "clubs": "♣",
-         "diamonds": "♦"}
+MAX_BET = 1000
+PITY_COINS = 5
 
-royals = {11: "J", 12: "Q", 13: "K", 1: "A"}
+# Net Wizcoins won per Wizcoin bet.
+PAYTABLE = {
+    "Royal Flush": 800,
+    "Straight Flush": 50,
+    "Four of a Kind": 25,
+    "Full House": 9,
+    "Flush": 6,
+    "Straight": 4,
+    "Three of a Kind": 3,
+    "Two Pair": 2,
+    "Jacks or Better": 1,
+}
+
+SUITS = "♥♠♣♦"
+FACES = {1: "A", 11: "J", 12: "Q", 13: "K"}
+HIGH_PAIRS = {1, 11, 12, 13}  # aces, jacks, queens, kings
+
+DROP_USAGE = ("Pick cards to swap by position, like !drop 2 5, "
+              "or !drop 0 to keep all five.")
+
+_rng = random.SystemRandom()
+_lock = threading.RLock()
+games = {}  # full name -> {"deck": [...], "hand": [...], "bet": int}
+
 
 def cmd(player, msg):
-    msg = msg.split()
-    commands = ["!poker", "!drop"]
-    output = []
+    command, args = wizard.parse(msg)
+    if command not in ("poker", "drop"):
+        return []
+    if not wizard.is_wizard(player):
+        return [wizard.denied(player)]
+    with _lock:
+        if command == "poker":
+            return deal(player, args[0] if args else "1")
+        return draw(player, args)
 
-    if msg[0] in commands:
-        if msg[0] == "!poker":
-            try: amt = int(msg[1])
-            except: amt = 1
-            output += play("draw", player, [], amt)
-        elif msg[0] == "!drop":
-            if len(msg) > 1:
-                discard = " ".join(msg[1:])
-                output += play("discard", player, discard)
-            else: 
-                output += play("discard", player, "0")
-#                output.append("Please type a list of space-seperated cards to discard, like !drop 0, !drop 1, !drop 3 5")
-    return output
 
-def play(mode="", player="", discard="", amt=1):
-    global state
-    output = []
+def new_deck():
+    deck = [(suit, rank) for suit in SUITS for rank in range(1, 14)]
+    _rng.shuffle(deck)
+    return deck
 
-    bank.check_balance(player)
-    try: amt = int(amt)
-    except: amt = 1
 
-    if amt < 1:
-        amt = 1
-    if amt > bank.check_balance(player, 1):
-        amt = bank.check_balance(player, 1)
-    if amt > 1000:
-        amt = 1000   
-    if amt < 1:
-        bank.deposit(player, 5)
-        amt = 1
-    
-    if mode == "draw":
-        if player in state:
-            bank.deduct(player, state[player][2])
-            output.append(f"You forfeit {state[player][2]} and "
-                          "begin a new game...")
-            del state[player]
-            output += play(mode, player, [], amt)
-            return output
-        deck = {"hearts": [i+1 for i in range(13)],
-                "spades": [i+1 for i in range(13)],
-                "clubs": [i+1 for i in range(13)],
-                "diamonds": [i+1 for i in range(13)]}
-        deck, hand = deal(deck, [])
+def deal(player, bet_arg):
+    name = wizard.short_name(player)
+    out = []
 
-        state[player] = [deck, hand, amt]
-        output.append(f"{player}'s hand is now {fmthand(player)}, "
-                      "enter some cards to discard (0 or 1-5)")
-        
-    elif mode == "discard":
-        if player not in state:
-            output.append(f"{player}, you need to start a game with !poker "
-                          "before you can discard cards.")
-            return output
-        deck, hand = state[player][0], state[player][1]
-        try:
-            discard = [int(d) for d in discard.split(" ")]
-        except:
-            return ["Please type a space seperated list of cards to discard, eg !drop 0 or !drop 2 or !drop 1 2 4"]
-        discard = [d for d in discard if d >= 0 if d < 6]
-        discard = sorted(list(set(discard)), reverse=True)
-        for d in discard:
-            if d == 0:
-                continue
-            d -= 1
-            hand.pop(d)
-        deck, hand = deal(deck, hand)
-        amt = state[player][2]
-        state[player] = [deck, hand, amt]
+    if player in games:
+        lost = games.pop(player)["bet"]
+        wizcoins.withdraw(player, lost)
+        out.append(f"{name} folds the last hand and forfeits {lost} Wizcoins.")
 
-        output.append(f"{player}'s hand is now {fmthand(player)}.")
-        if reward(player):
-            payout = reward(player)
-            bank.deposit(player, payout)
-            output.append(f"Congrats on the {check(player)} {player}, "
-                          f"you won {payout} and now have "
-                          f"{bank.check_balance(player, 1)} gikocoins!")
-            del state[player]
-        else:
-            bank.deduct(player, state[player][2])
-            output.append(f"Sorry {player}, you lost {amt} and now have "
-                          f"{bank.check_balance(player, 1)} gikocoins.")
-            del state[player]
-    return output
-    
-def deal(deck=[], hand=[]):
-    while len(hand) < 5:
-        suit = random.choice(list(deck.keys()))
-        card = random.choice(deck[suit])
-        hand += [[suit, deck[suit].pop(deck[suit].index(card))]]
-    return deck, hand
+    coins = wizcoins.balance(player)
+    if coins < 1:
+        coins = wizcoins.deposit(player, PITY_COINS)
+        out.append(f"{name} is broke, so the wizard council grants "
+                   f"{PITY_COINS} Wizcoins.")
 
-def check(player):
-    hand = state[player][1]
-    hsuits = [i[0] for i in hand]
-    cards = sorted([i[1] for i in hand])
-    matches = []
+    try:
+        bet = int(bet_arg)
+    except ValueError:
+        bet = 1
+    bet = max(1, min(bet, coins, MAX_BET))
 
-    scards = sorted(set((x, cards.count(x)) for x in cards if
-                        cards.count(x) >= 2), key= lambda x: x[1],
-                    reverse=True)
+    deck = new_deck()
+    hand = [deck.pop() for _ in range(5)]
+    games[player] = {"deck": deck, "hand": hand, "bet": bet}
 
-    if len(scards) == 1:
-        if scards[0][1] == 2:
-            if scards[0][0] > 10 or scards[0][0] == 1:
-                matches.append("pair")
-        elif scards[0][1] == 3:
-            matches.append("3ofkind")
-        elif scards[0][1] == 4:
-            matches.append("4ofkind")
+    out.append(f"{name} bets {bet} Wizcoins: {show(hand, numbered=True)} "
+               f"| {DROP_USAGE}")
+    return out
 
-    elif len(scards) > 1:
-        print(scards)
-        if scards[0][1] == 2:
-            matches.append("2pair")
-        elif scards[0][1] == 3:
-            matches.append("full house")
-            
-    if len(matches) == 0:
-        mycards = sorted(cards)
-        stcheck = list(range(min(mycards), max(mycards) +1))
-        if mycards == stcheck:
-            matches.append("straight")
-        elif mycards[0] == 1:
-            mycards = [*mycards[1:], 14]
-            stcheck = list(range(min(mycards), max(mycards) +1))
-            if mycards == stcheck:
-                matches += ["straight", "royal"]
 
-    if hsuits.count(hsuits[0]) == 5:
-        matches.append("flush")
-    if "flush" in matches and "royal" in matches:
-        matches = ["royal flush"]
-    elif "flush" in matches and "straight" in matches:
-        matches = ["straight flush"]
+def draw(player, args):
+    name = wizard.short_name(player)
+    game = games.get(player)
+    if game is None:
+        return [f"{name}, start a hand with !poker <bet> first."]
 
-    if len(matches):
-        return matches[0]
-    return matches
+    try:
+        picks = {int(a) for a in args}
+    except ValueError:
+        return [DROP_USAGE]
 
-def fmthand(player):
-    hand = state[player][1]
-    nicehand = [[i[0], royals[i[1]]] if i[1] in royals else i
-                for i in hand]
-    nicehand = [f"{suits[card[0]]}{card[1]}" for card in nicehand]
-        
-    return f"({'/'.join([i for i in nicehand])})"
+    hand, deck, bet = game["hand"], game["deck"], game["bet"]
+    for pos in sorted(p for p in picks if 1 <= p <= 5):
+        hand[pos - 1] = deck.pop()
+    del games[player]
 
-def reward(player):
-    score = check(player)
-        
-    prizes = {"pair": 1, "2pair": 2, "3ofkind": 3,
-              "straight": 4, "flush": 6, "full house": 9,
-              "4ofkind": 25, "straight flush": 50,
-              "royal flush": 800}
-    if not len(score):
-        return 0
-    return state[player][2] * prizes[score]
-    
+    rank = evaluate(hand)
+    if rank:
+        won = bet * PAYTABLE[rank]
+        coins = wizcoins.deposit(player, won)
+        result = f"{rank}! {name} wins {won} Wizcoins and now has {coins}."
+    else:
+        coins = wizcoins.withdraw(player, bet)
+        result = f"No luck, {name} loses {bet} Wizcoins and now has {coins}."
+    return [f"{show(hand)} {result}"]
+
+
+def evaluate(hand):
+    """Name of the best paying hand, or None if it doesn't pay."""
+    ranks = sorted(rank for _, rank in hand)
+    counts = sorted(Counter(ranks).values(), reverse=True)
+    flush = len({suit for suit, _ in hand}) == 1
+    distinct = len(set(ranks)) == 5
+    royal = ranks == [1, 10, 11, 12, 13]
+    straight = distinct and (ranks[4] - ranks[0] == 4 or royal)
+
+    if royal and flush:
+        return "Royal Flush"
+    if straight and flush:
+        return "Straight Flush"
+    if counts[0] == 4:
+        return "Four of a Kind"
+    if counts == [3, 2]:
+        return "Full House"
+    if flush:
+        return "Flush"
+    if straight:
+        return "Straight"
+    if counts[0] == 3:
+        return "Three of a Kind"
+    if counts == [2, 2, 1]:
+        return "Two Pair"
+    if counts[0] == 2:
+        pair = next(r for r, c in Counter(ranks).items() if c == 2)
+        if pair in HIGH_PAIRS:
+            return "Jacks or Better"
+    return None
+
+
+def show(hand, numbered=False):
+    cards = [f"{suit}{FACES.get(rank, rank)}" for suit, rank in hand]
+    if numbered:
+        return " ".join(f"[{i}]{c}" for i, c in enumerate(cards, 1))
+    return "(" + " ".join(cards) + ")"
+
+
 print("Poker plugin loaded")
-
-    
