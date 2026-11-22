@@ -21,7 +21,7 @@ from plugin import wizcoins
 
 SERVER = "play.gikopoi.com"
 AREA = "for"
-ROOM = "bar"
+ROOM = "admin"
 CHARACTER = "naito_npc"
 BOT_NAME = "Akai's bot"
 PASSWORD = "npc"

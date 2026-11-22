@@ -10,8 +10,8 @@ Winnings are paid in **Wizcoins**.
 
 ```sh
 pip3 install -r requirements.txt
-./giko.py          # joins the bar
-./giko.py lobby    # or pass a room ID
+./giko.py          # joins the admin room
+./giko.py bar      # or pass another room ID
 ```
 
 Server, area, room, character and bot name are at the top of `giko.py`.
